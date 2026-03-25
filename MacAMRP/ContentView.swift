@@ -1,59 +1,61 @@
 //
-//  ContentView.swift
+//  MenuBarView.swift
 //  MacAMRP
 //
-//  Created by Dan Morgan on 17/03/2026.
+//  SwiftUI view that populates the MenuBarExtra dropdown menu.
 //
 
 import SwiftUI
-import SwiftData
 
-struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query private var items: [Item]
+struct MenuBarView: View {
+    @Environment(RichPresenceManager.self) private var manager
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        NavigationSplitView {
-            List {
-                ForEach(items) { item in
-                    NavigationLink {
-                        Text("Item at \(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))")
-                    } label: {
-                        Text(item.timestamp, format: Date.FormatStyle(date: .numeric, time: .standard))
-                    }
-                }
-                .onDelete(perform: deleteItems)
+        // Current track info (non-interactive)
+        if let track = manager.currentTrack {
+            let icon = track.isPlaying ? "▶" : "⏸"
+            Text("\(icon) \(track.name)")
+                .disabled(true)
+            if !track.artist.isEmpty {
+                Text(track.artist)
+                    .foregroundStyle(.secondary)
+                    .disabled(true)
             }
-            .navigationSplitViewColumnWidth(min: 180, ideal: 200)
-            .toolbar {
-                ToolbarItem {
-                    Button(action: addItem) {
-                        Label("Add Item", systemImage: "plus")
-                    }
-                }
-            }
-        } detail: {
-            Text("Select an item")
+        } else {
+            Text("Not playing")
+                .foregroundStyle(.secondary)
+                .disabled(true)
         }
-    }
 
-    private func addItem() {
-        withAnimation {
-            let newItem = Item(timestamp: Date())
-            modelContext.insert(newItem)
+        Divider()
+
+        // Discord connection status
+        Label(
+            manager.isDiscordConnected ? "Connected to Discord" : "Discord not connected",
+            systemImage: manager.isDiscordConnected ? "circle.fill" : "circle"
+        )
+        .foregroundStyle(manager.isDiscordConnected ? .green : .secondary)
+        .disabled(true)
+
+        Divider()
+
+        Button(manager.isEnabled ? "Disable Rich Presence" : "Enable Rich Presence") {
+            manager.isEnabled.toggle()
         }
-    }
 
-    private func deleteItems(offsets: IndexSet) {
-        withAnimation {
-            for index in offsets {
-                modelContext.delete(items[index])
-            }
+        Divider()
+
+        Button("Settings...") {
+            openSettings()
         }
-    }
-}
+        .keyboardShortcut(",")
 
-#Preview {
-    ContentView()
-        .modelContainer(for: Item.self, inMemory: true)
+        Divider()
+
+        Button("Quit MacAMRP") {
+            NSApplication.shared.terminate(nil)
+        }
+        .keyboardShortcut("q")
+    }
 }

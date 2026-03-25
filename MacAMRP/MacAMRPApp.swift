@@ -6,27 +6,34 @@
 //
 
 import SwiftUI
-import SwiftData
 
 @main
 struct MacAMRPApp: App {
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Item.self,
-        ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
-
-        do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
-        } catch {
-            fatalError("Could not create ModelContainer: \(error)")
-        }
-    }()
+    @State private var manager = RichPresenceManager()
 
     var body: some Scene {
-        WindowGroup {
-            ContentView()
+        // Menu bar icon + dropdown menu
+        MenuBarExtra {
+            MenuBarView()
+                .environment(manager)
+        } label: {
+            Image(systemName: "music.note")
         }
-        .modelContainer(sharedModelContainer)
+        .menuBarExtraStyle(.menu)
+
+        // Settings window - opened via "Settings..." menu item
+        Settings {
+            SettingsView()
+                .environment(manager)
+        }
+    }
+
+    init() {
+        UserDefaults.standard.register(defaults: [
+            SettingsKey.enabled: true,
+            SettingsKey.showAlbumArt: true,
+            SettingsKey.showTimestamp: true,
+            SettingsKey.showArtistInState: true
+        ])
     }
 }
