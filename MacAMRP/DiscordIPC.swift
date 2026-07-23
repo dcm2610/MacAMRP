@@ -11,11 +11,14 @@ import Foundation
 // MARK: - Types
 
 struct DiscordActivity {
+    var activityType: Int = 0   // 0=Playing, 2=Listening, 3=Watching, 5=Competing
+    var name: String?           // Overrides the app name shown in the presence (e.g. artist name)
     var details: String?        // Top line (e.g. track name)
     var state: String?          // Bottom line (e.g. artist)
     var largeImageURL: String?  // External https:// URL for album art
     var largeImageText: String? // Tooltip for large image
-    var smallImageKey: String?  // Asset key for small image
+    var smallImageKey: String?  // Asset key for small image (uploaded to Discord app)
+    var smallImageURL: String?  // External https:// URL for small image
     var smallImageText: String? // Tooltip for small image
     var startTimestamp: Date?   // When playback started (shows elapsed time)
     var endTimestamp: Date?     // When track ends (shows remaining time)
@@ -26,11 +29,13 @@ struct DiscordActivity {
 
 /// Manages a persistent connection to the local Discord client via Unix socket IPC.
 /// All operations are performed on an internal serial queue.
-final class DiscordIPC {
+@preconcurrency
+final class DiscordIPC: @unchecked Sendable {
     private let clientID: String
     private let queue = DispatchQueue(label: "com.macamrp.discord-ipc", qos: .utility)
 
     private var socketFD: Int32 = -1
+    // Accessed only on `queue` - use nonisolatedIsConnected for cross-thread reads
     private var isConnected = false
     private var reconnectTimer: DispatchSourceTimer?
 
@@ -61,9 +66,15 @@ final class DiscordIPC {
     }
 
     func setActivity(_ activity: DiscordActivity?) {
+        let payload = buildSetActivityPayload(activity)
+        print("[DiscordIPC] setActivity queued, payload=\(payload)")
         queue.async { [weak self] in
-            guard let self, isConnected else { return }
-            let payload = buildSetActivityPayload(activity)
+            guard let self else { return }
+            guard isConnected else {
+                print("[DiscordIPC] setActivity: not connected on queue, dropping")
+                return
+            }
+            print("[DiscordIPC] sending SET_ACTIVITY")
             sendFrame(opcode: 1, payload: payload)
         }
     }
@@ -121,26 +132,30 @@ final class DiscordIPC {
         }
 
         guard result == 0 else {
+            print("[DiscordIPC] connect(\(path)) failed: errno \(errno)")
             close(fd)
             return false
         }
 
+        print("[DiscordIPC] Socket connected to \(path)")
         socketFD = fd
 
         // Send handshake
         let handshake = #"{"v":1,"client_id":"\#(clientID)"}"#
         sendFrame(opcode: 0, payload: handshake)
+        print("[DiscordIPC] Handshake sent for client_id=\(clientID)")
 
         // Read READY response
         if readReady() {
             isConnected = true
+            print("[DiscordIPC] Connected and READY")
             DispatchQueue.main.async { [weak self] in
                 self?.onConnectionStateChange?(true)
             }
-            // Start reading loop to catch disconnects
             startReadLoop()
             return true
         } else {
+            print("[DiscordIPC] Did not receive READY - closing")
             close(fd)
             socketFD = -1
             return false
@@ -148,7 +163,13 @@ final class DiscordIPC {
     }
 
     private func readReady() -> Bool {
-        guard let (opcode, data) = readFrame(), opcode == 1,
+        guard let (opcode, data) = readFrame() else {
+            print("[DiscordIPC] readReady: failed to read frame")
+            return false
+        }
+        let payload = String(data: data, encoding: .utf8) ?? "<binary>"
+        print("[DiscordIPC] readReady: opcode=\(opcode) payload=\(payload)")
+        guard opcode == 1,
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let evt = json["evt"] as? String, evt == "READY"
         else { return false }
@@ -158,18 +179,21 @@ final class DiscordIPC {
     // MARK: - Read Loop
 
     private func startReadLoop() {
-        queue.async { [weak self] in
-            self?.readLoop()
-        }
+        // Run on a dedicated thread - readFrame() blocks, so it must NOT run on `queue`
+        // otherwise queue.async { sendFrame } would never execute.
+        let t = Thread {  [weak self] in self?.readLoop() }
+        t.name = "com.macamrp.discord-read"
+        t.start()
     }
 
     private func readLoop() {
         while isConnected {
-            guard let (_, _) = readFrame() else {
+            guard let (opcode, data) = readFrame() else {
                 handleDisconnect()
                 return
             }
-            // We don't need to process incoming frames for basic Rich Presence
+            let payload = String(data: data, encoding: .utf8) ?? "<binary>"
+            print("[DiscordIPC] recv opcode=\(opcode) payload=\(payload)")
         }
     }
 
@@ -271,7 +295,12 @@ final class DiscordIPC {
 
         let act = activity!
         var activityDict: [String: Any] = [:]
-        activityDict["type"] = 2 // Listening
+        let activityType = act.activityType
+        activityDict["type"] = activityType
+
+        if let name = act.name {
+            activityDict["name"] = name
+        }
 
         if let details = act.details {
             activityDict["details"] = details
@@ -292,6 +321,7 @@ final class DiscordIPC {
             activityDict["timestamps"] = timestamps
         }
 
+
         // Assets
         var assets: [String: Any] = [:]
         if let img = act.largeImageURL {
@@ -300,7 +330,7 @@ final class DiscordIPC {
         if let txt = act.largeImageText {
             assets["large_text"] = txt
         }
-        if let img = act.smallImageKey {
+        if let img = act.smallImageURL ?? act.smallImageKey {
             assets["small_image"] = img
         }
         if let txt = act.smallImageText {
@@ -344,6 +374,6 @@ final class DiscordIPC {
 private extension Data {
     mutating func appendUInt32LE(_ value: UInt32) {
         var v = value.littleEndian
-        withUnsafeBytes(of: &v) { append(contentsOf: $0) }
+        Swift.withUnsafeBytes(of: &v) { append(contentsOf: $0) }
     }
 }

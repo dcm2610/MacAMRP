@@ -8,20 +8,20 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Environment(RichPresenceManager.self) private var manager
+    @Bindable var manager: RichPresenceManager
     @Environment(\.dismiss) private var dismiss
 
     @State private var clientIDInput: String = ""
     @State private var editingClientID = false
     @State private var selectedTab: SettingsTab = .general
+    @Namespace private var tabNamespace
 
     var body: some View {
-        @Bindable var manager = manager
 
         ZStack {
-            // Full-bleed background
+            // Full-bleed vibrancy background — blurs and tints whatever is behind the window
             Rectangle()
-                .fill(.black.opacity(0.45))
+                .fill(.ultraThinMaterial)
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
@@ -124,14 +124,13 @@ struct SettingsView: View {
         .buttonStyle(.plain)
         .glassEffect(selectedTab == tab ? .regular.tint(.white.opacity(0.15)).interactive() : .regular.interactive(),
                      in: .capsule)
-        .glassEffectID(tab.id, in: Namespace().wrappedValue)
+        .glassEffectID(tab.id, in: tabNamespace)
     }
 
     // MARK: - General Tab
 
     private var generalTab: some View {
-        @Bindable var manager = manager
-        return ScrollView {
+        ScrollView {
             VStack(spacing: 12) {
                 settingsCard(title: "Rich Presence", icon: "antenna.radiowaves.left.and.right") {
                     settingsRow(
@@ -139,6 +138,12 @@ struct SettingsView: View {
                         description: "Show your currently playing track on Discord"
                     ) {
                         Toggle("", isOn: $manager.isEnabled).labelsHidden()
+                    }
+                    settingsRow(
+                        label: "Launch at login",
+                        description: "Start MacAMRP automatically when you log in"
+                    ) {
+                        Toggle("", isOn: $manager.launchAtLogin).labelsHidden()
                     }
                 }
 
@@ -189,15 +194,31 @@ struct SettingsView: View {
     // MARK: - Display Tab
 
     private var displayTab: some View {
-        @Bindable var manager = manager
-        return ScrollView {
+        ScrollView {
             VStack(spacing: 12) {
-                settingsCard(title: "Artwork", icon: "photo") {
+                settingsCard(title: "Images", icon: "photo") {
                     settingsRow(
-                        label: "Show album art",
-                        description: "Fetch artwork from the iTunes Search API"
+                        label: "Large image",
+                        description: "Main image shown on the presence card"
                     ) {
-                        Toggle("", isOn: $manager.showAlbumArt).labelsHidden()
+                        Picker("", selection: $manager.largeImageMode) {
+                            Text("Album art").tag("albumart")
+                            Text("Apple Music icon").tag("applemusic")
+                            Text("None").tag("none")
+                        }
+                        .labelsHidden()
+                        .frame(width: 160)
+                    }
+                    settingsRow(
+                        label: "Small image",
+                        description: "Corner pip shown on the presence card"
+                    ) {
+                        Picker("", selection: $manager.smallImageMode) {
+                            Text("Apple Music icon").tag("applemusic")
+                            Text("None").tag("none")
+                        }
+                        .labelsHidden()
+                        .frame(width: 160)
                     }
                 }
 
@@ -213,23 +234,27 @@ struct SettingsView: View {
                 settingsCard(title: "Activity Type", icon: "headphones") {
                     settingsRow(
                         label: "Show as \"Listening to\"",
-                        description: "Use the Listening type instead of Playing"
+                        description: "Show your presence as \"Listening to\" instead of \"Playing\""
                     ) {
-                        Toggle("", isOn: $manager.useListeningType).labelsHidden()
+                        Toggle("", isOn: $manager.useListeningType)
+                            .labelsHidden()
+                    }
+                    settingsRow(
+                        label: "Show artist as presence name",
+                        description: "Replaces \"Apple Music\" with the artist name (e.g. \"Listening to Radiohead\")"
+                    ) {
+                        Toggle("", isOn: $manager.artistAsPresenceName)
+                            .labelsHidden()
                     }
                 }
 
                 settingsCard(title: "Timestamps", icon: "timer") {
                     settingsRow(
-                        label: "Show elapsed time",
-                        description: manager.useListeningType
-                            ? "Progress bar unavailable with \"Listening to\" — Discord limitation"
-                            : "Show a progress timer on your presence"
+                        label: "Show progress bar",
+                        description: "Show a real-time progress bar on your presence"
                     ) {
                         Toggle("", isOn: $manager.showTimestamp)
                             .labelsHidden()
-                            .disabled(manager.useListeningType)
-                            .opacity(manager.useListeningType ? 0.4 : 1)
                     }
                 }
             }
@@ -255,7 +280,7 @@ struct SettingsView: View {
                 Text("Apple Music Rich Presence for macOS")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.6))
-                Text("Version 1.0")
+                Text("Version 1.1")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.4))
             }
@@ -365,6 +390,5 @@ enum SettingsTab: String, CaseIterable, Identifiable {
 }
 
 #Preview {
-    SettingsView()
-        .environment(RichPresenceManager())
+    SettingsView(manager: RichPresenceManager())
 }

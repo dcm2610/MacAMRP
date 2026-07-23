@@ -14,7 +14,7 @@ enum AppIconRenderer {
     /// Renders an icon at exactly `size` × `size` pixels.
     static func render(size: CGFloat = 1024) -> NSImage {
         let px = Int(size)
-        let cornerRadius = size * 0.22
+        let cornerRadius = size * 0.26
 
         guard
             let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
@@ -71,7 +71,7 @@ enum AppIconRenderer {
             ctx.drawLinearGradient(grad,
                                    start: CGPoint(x: size * 0.2, y: size),
                                    end: CGPoint(x: size * 0.8, y: 0),
-                                   options: [])
+                                   options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         }
 
         // Gloss overlay
@@ -80,7 +80,7 @@ enum AppIconRenderer {
             ctx.drawLinearGradient(gloss,
                                    start: CGPoint(x: size / 2, y: size),
                                    end: CGPoint(x: size / 2, y: size * 0.5),
-                                   options: [])
+                                   options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
         }
 
         // Draw white music note into a separate context then composite in

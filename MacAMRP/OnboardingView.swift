@@ -15,7 +15,7 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     private init() {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 480, height: 560),
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 620),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -33,8 +33,12 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
     func show(manager: RichPresenceManager) {
         guard let window else { return }
 
+        // Mark as launched immediately so a restart before closing doesn't re-show onboarding
+        UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
+
         NSApp.applicationIconImage = AppIconRenderer.cachedIcon
         window.contentViewController = NSHostingController(rootView: OnboardingView(manager: manager))
+        window.center()
 
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
@@ -44,7 +48,6 @@ final class OnboardingWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        UserDefaults.standard.set(true, forKey: "hasLaunchedBefore")
     }
 }
 
@@ -61,14 +64,14 @@ struct OnboardingView: View {
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
-                Spacer()
+                Spacer().frame(height: 48)
 
-                // App icon
+                // App icon — corners are baked into the rendered image (transparent pixels)
                 Image(nsImage: AppIconRenderer.cachedIcon)
                     .resizable()
                     .frame(width: 96, height: 96)
-                    .clipShape(RoundedRectangle(cornerRadius: 21))
-                    .shadow(color: .black.opacity(0.3), radius: 20, y: 8)
+                    .clipShape(RoundedRectangle(cornerRadius: 25, style: .continuous))
+                    .shadow(color: .black.opacity(0.35), radius: 16, y: 6)
 
                 Spacer().frame(height: 24)
 
@@ -103,6 +106,8 @@ struct OnboardingView: View {
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.45))
                     .multilineTextAlignment(.center)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 48)
 
                 Spacer().frame(height: 24)
@@ -127,7 +132,7 @@ struct OnboardingView: View {
                 Spacer().frame(height: 32)
             }
         }
-        .frame(width: 480, height: 560)
+        .frame(width: 480, height: 620)
     }
 
     private func featureRow(icon: String, title: String, description: String) -> some View {

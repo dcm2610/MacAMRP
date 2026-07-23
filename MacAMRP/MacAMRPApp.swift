@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AppKit
 
 @main
 struct MacAMRPApp: App {
@@ -20,20 +21,16 @@ struct MacAMRPApp: App {
             Image(systemName: "music.note")
         }
         .menuBarExtraStyle(.menu)
-
-        // Settings window - opened via "Settings..." menu item
-        Settings {
-            SettingsView()
-                .environment(manager)
+        .onChange(of: true, initial: true) {
+            if !UserDefaults.standard.bool(forKey: "hasLaunchedBefore") {
+                // Small delay so NSApp is fully ready before presenting the window
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    OnboardingWindowController.shared.show(manager: manager)
+                }
+            }
         }
+
+        // Settings window is managed by SettingsWindowController (see ContentView.swift)
     }
 
-    init() {
-        UserDefaults.standard.register(defaults: [
-            SettingsKey.enabled: true,
-            SettingsKey.showAlbumArt: true,
-            SettingsKey.showTimestamp: true,
-            SettingsKey.showArtistInState: true
-        ])
-    }
 }

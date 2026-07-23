@@ -6,10 +6,59 @@
 //
 
 import SwiftUI
+import AppKit
+
+// Manages the settings window lifecycle, including Dock icon visibility.
+final class SettingsWindowController: NSWindowController, NSWindowDelegate {
+    static let shared = SettingsWindowController()
+
+    private var manager: RichPresenceManager?
+
+    private init() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 600),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Settings"
+        window.titlebarAppearsTransparent = true
+        window.isMovableByWindowBackground = true
+        window.center()
+        super.init(window: window)
+        window.delegate = self
+    }
+
+    required init?(coder: NSCoder) { fatalError() }
+
+    func open(manager: RichPresenceManager) {
+        self.manager = manager
+
+        guard let window else { return }
+
+        // Set our custom icon
+        NSApp.applicationIconImage = AppIconRenderer.cachedIcon
+
+        if !(window.contentViewController is NSHostingController<SettingsView>) {
+            window.contentViewController = NSHostingController(rootView: SettingsView(manager: manager))
+        }
+
+        // Switch to regular activation policy so the app appears in the Dock,
+        // then immediately bring the window to front.
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        window.orderFrontRegardless()
+        window.makeKeyAndOrderFront(nil)
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        // Return to accessory (menu-bar-only) mode when settings is closed
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
 
 struct MenuBarView: View {
     @Environment(RichPresenceManager.self) private var manager
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         // Current track info (non-interactive)
@@ -30,12 +79,15 @@ struct MenuBarView: View {
 
         Divider()
 
-        // Discord connection status
-        Label(
-            manager.isDiscordConnected ? "Connected to Discord" : "Discord not connected",
-            systemImage: manager.isDiscordConnected ? "circle.fill" : "circle"
-        )
-        .foregroundStyle(manager.isDiscordConnected ? .green : .secondary)
+        // Discord connection status — use palette-coloured symbol since
+        // .foregroundStyle() is stripped by macOS in menu bar items.
+        Label {
+            Text(manager.isDiscordConnected ? "Connected to Discord" : "Discord not connected")
+        } icon: {
+            Image(systemName: manager.isDiscordConnected ? "circle.fill" : "circle")
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(manager.isDiscordConnected ? Color.green : Color.secondary)
+        }
         .disabled(true)
 
         Divider()
@@ -47,7 +99,7 @@ struct MenuBarView: View {
         Divider()
 
         Button("Settings...") {
-            openSettings()
+            SettingsWindowController.shared.open(manager: manager)
         }
         .keyboardShortcut(",")
 

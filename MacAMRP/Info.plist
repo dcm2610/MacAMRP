@@ -11,6 +11,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<false/>
 	</dict>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.music</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>MacAMRP needs to communicate with Music.app to get the current playback position for the Discord progress bar.</string>
 	<key>CFBundleName</key>
 	<string>MacAMRP</string>
 	<key>CFBundleDisplayName</key>
@@ -18,9 +22,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>danielmorgan.MacAMRP</string>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0</string>
+	<string>1.1</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundlePackageType</key>
